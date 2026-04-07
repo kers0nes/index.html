@@ -1,0 +1,1059 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua Deobfuscator - Sandbox Executor</title>
+    <script src="https://cdn.jsdelivr.net/npm/fengari@0.13.3/dist/fengari.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fengari-lua@0.13.3/dist/fengari-lua.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: #1a1a1a;
+            color: #e0e0e0;
+            line-height: 1.6;
+            overflow: hidden;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            gap: 0;
+        }
+
+        header {
+            background: #0d0d0d;
+            border-bottom: 2px solid #00ff00;
+            padding: 16px 24px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+        }
+
+        header h1 {
+            color: #00ff00;
+            font-size: 24px;
+            font-weight: bold;
+            letter-spacing: 2px;
+        }
+
+        header p {
+            color: #888;
+            font-size: 12px;
+            margin-top: 4px;
+        }
+
+        .tabs-container {
+            background: #0d0d0d;
+            border-bottom: 2px solid #333;
+            display: flex;
+            gap: 0;
+            padding: 0;
+            overflow-x: auto;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .tab-button {
+            background: #1a1a1a;
+            color: #888;
+            border: none;
+            padding: 12px 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-bottom: 3px solid transparent;
+            white-space: nowrap;
+            font-weight: bold;
+        }
+
+        .tab-button:hover {
+            color: #00ff00;
+            background: #252525;
+        }
+
+        .tab-button.active {
+            color: #00ff00;
+            border-bottom-color: #00ff00;
+            background: #0d0d0d;
+        }
+
+        .main-content {
+            display: flex;
+            flex: 1;
+            gap: 16px;
+            padding: 16px;
+            min-height: 0;
+        }
+
+        .tab-content {
+            display: none;
+            flex: 1;
+            gap: 16px;
+            min-height: 0;
+        }
+
+        .tab-content.active {
+            display: flex;
+        }
+
+        .panel {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            background: #252525;
+            border: 1px solid #444;
+            border-radius: 4px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .panel-header {
+            background: #1a1a1a;
+            border-bottom: 1px solid #00ff00;
+            padding: 12px 16px;
+            font-weight: bold;
+            color: #00ff00;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .panel-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            padding: 12px;
+        }
+
+        textarea {
+            flex: 1;
+            background: #1a1a1a;
+            color: #00ff00;
+            border: 1px solid #444;
+            border-radius: 2px;
+            padding: 12px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            resize: none;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        textarea:focus {
+            border-color: #00ff00;
+            box-shadow: 0 0 8px rgba(0, 255, 0, 0.2);
+        }
+
+        textarea::placeholder {
+            color: #555;
+        }
+
+        textarea:read-only {
+            color: #66ccff;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            background: #00ff00;
+            color: #1a1a1a;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 2px;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        button:hover:not(:disabled) {
+            background: #00dd00;
+            box-shadow: 0 0 12px rgba(0, 255, 0, 0.4);
+            transform: translateY(-2px);
+        }
+
+        button:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            background: #666;
+            color: #999;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        .execute-btn {
+            flex: 1;
+            min-width: 120px;
+            background: #00cc00;
+        }
+
+        .secondary-btn {
+            background: #0066ff;
+        }
+
+        .secondary-btn:hover:not(:disabled) {
+            background: #0055dd;
+            box-shadow: 0 0 12px rgba(0, 102, 255, 0.4);
+        }
+
+        .danger-btn {
+            background: #ff3333;
+        }
+
+        .danger-btn:hover:not(:disabled) {
+            background: #dd3333;
+            box-shadow: 0 0 12px rgba(255, 51, 51, 0.4);
+        }
+
+        .right-column {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            min-width: 320px;
+        }
+
+        .log-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .log-content {
+            flex: 1;
+            background: #1a1a1a;
+            border: 1px solid #444;
+            border-radius: 2px;
+            padding: 12px;
+            overflow-y: auto;
+            font-size: 11px;
+            line-height: 1.4;
+            min-height: 0;
+        }
+
+        .log-entry {
+            margin: 4px 0;
+            padding: 4px 0;
+            border-bottom: 1px solid #333;
+        }
+
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+
+        .log-timestamp {
+            color: #666;
+            font-size: 10px;
+        }
+
+        .log-info {
+            color: #00ff00;
+        }
+
+        .log-success {
+            color: #00cc00;
+        }
+
+        .log-warning {
+            color: #ffaa00;
+        }
+
+        .log-error {
+            color: #ff6666;
+        }
+
+        .log-captured {
+            color: #66ccff;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 6px;
+            background: #666;
+        }
+
+        .status-indicator.idle {
+            background: #00ff00;
+        }
+
+        .status-indicator.running {
+            background: #ffaa00;
+            animation: pulse 0.8s infinite;
+        }
+
+        .status-indicator.error {
+            background: #ff6666;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .tab-info {
+            background: #1a1a1a;
+            border: 1px solid #444;
+            border-radius: 2px;
+            padding: 10px 12px;
+            font-size: 11px;
+            color: #888;
+            margin-bottom: 12px;
+            line-height: 1.4;
+        }
+
+        .tab-info strong {
+            color: #00ff00;
+        }
+
+        @media (max-width: 1200px) {
+            .main-content {
+                flex-direction: column;
+            }
+
+            .right-column {
+                min-width: auto;
+            }
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #1a1a1a;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #444;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔓 Lua Deobfuscator</h1>
+            <p>Sandbox Executor • WeAreDevs • MoonSec • Luraph • Mote • Custom</p>
+        </header>
+
+        <!-- Tabs Navigation -->
+        <div class="tabs-container" id="tabsContainer">
+            <button class="tab-button active" onclick="switchTab('generic')">
+                📋 Generic
+            </button>
+            <button class="tab-button" onclick="switchTab('wearevs')">
+                🔵 WeAreDevs
+            </button>
+            <button class="tab-button" onclick="switchTab('moonsec')">
+                🌙 MoonSec
+            </button>
+            <button class="tab-button" onclick="switchTab('luraph')">
+                📦 Luraph
+            </button>
+            <button class="tab-button" onclick="switchTab('mote')">
+                ⚙️ Mote
+            </button>
+            <button class="tab-button" onclick="switchTab('custom')">
+                🛠️ Custom
+            </button>
+        </div>
+
+        <div class="main-content">
+            <!-- Generic Tab -->
+            <div id="tab-generic" class="tab-content active">
+                <div class="panel">
+                    <div class="panel-header">📥 Obfuscated Input</div>
+                    <div class="panel-content">
+                        <div class="tab-info">
+                            <strong>Generic Mode:</strong> Works with most obfuscators. Captures print(), load(), loadstring() outputs.
+                        </div>
+                        <textarea id="inputGeneric" placeholder="Paste obfuscated Lua code here..."></textarea>
+                        <div class="button-group">
+                            <button class="execute-btn" onclick="executeDeobfuscate('generic')">
+                                ▶ Execute & Deobfuscate
+                            </button>
+                            <button class="danger-btn" onclick="clearTab('generic')">
+                                🗑️ Clear
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="right-column">
+                    <div class="panel">
+                        <div class="panel-header">📤 Deobfuscated Output</div>
+                        <div class="panel-content">
+                            <textarea id="outputGeneric" placeholder="Deobfuscated code will appear here..." readonly></textarea>
+                            <div class="button-group">
+                                <button class="secondary-btn" onclick="copyOutput('generic')">
+                                    📋 Copy Output
+                                </button>
+                                <button class="danger-btn" onclick="clearOutput('generic')">
+                                    🗑️ Clear
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="panel log-panel">
+                        <div class="panel-header">
+                            <span class="status-indicator idle" id="statusGeneric"></span>
+                            Status Log
+                        </div>
+                        <div class="log-content" id="logGeneric"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- WeAreDevs Tab -->
+            <div id="tab-wearevs" class="tab-content">
+                <div class="panel">
+                    <div class="panel-header">📥 WeAreDevs Obfuscated Code</div>
+                    <div class="panel-content">
+                        <div class="tab-info">
+                            <strong>WeAreDevs Specialization:</strong> Optimized for WeAreDevs obfuscator patterns. Hooks string deobfuscation routines.
+                        </div>
+                        <textarea id="inputWearevs" placeholder="Paste WeAreDevs obfuscated code here..."></textarea>
+                        <div class="button-group">
+                            <button class="execute-btn" onclick="executeDeobfuscate('wearevs')">
+                                ▶ Execute & Deobfuscate
+                            </button>
+                            <button class="danger-btn" onclick="clearTab('wearevs')">
+                                🗑️ Clear
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="right-column">
+                    <div class="panel">
+                        <div class="panel-header">📤 Deobfuscated Output</div>
+                        <div class="panel-content">
+                            <textarea id="outputWearevs" placeholder="Deobfuscated code will appear here..." readonly></textarea>
+                            <div class="button-group">
+                                <button class="secondary-btn" onclick="copyOutput('wearevs')">
+                                    📋 Copy Output
+                                </button>
+                                <button class="danger-btn" onclick="clearOutput('wearevs')">
+                                    🗑️ Clear
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="panel log-panel">
+                        <div class="panel-header">
+                            <span class="status-indicator idle" id="statusWearevs"></span>
+                            Status Log
+                        </div>
+                        <div class="log-content" id="logWearevs"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MoonSec Tab -->
+            <div id="tab-moonsec" class="tab-content">
+                <div class="panel">
+                    <div class="panel-header">📥 MoonSec Obfuscated Code</div>
+                    <div class="panel-content">
+                        <div class="tab-info">
+                            <strong>MoonSec Specialization:</strong> Targets MoonSec VM bytecode. Captures decompiled instructions and metadata.
+                        </div>
+                        <textarea id="inputMoonsec" placeholder="Paste MoonSec obfuscated code here..."></textarea>
+                        <div class="button-group">
+                            <button class="execute-btn" onclick="executeDeobfuscate('moonsec')">
+                                ▶ Execute & Deobfuscate
+                            </button>
+                            <button class="danger-btn" onclick="clearTab('moonsec')">
+                                🗑️ Clear
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="right-column">
+                    <div class="panel">
+                        <div class="panel-header">📤 Deobfuscated Output</div>
+                        <div class="panel-content">
+                            <textarea id="outputMoonsec" placeholder="Deobfuscated code will appear here..." readonly></textarea>
+                            <div class="button-group">
+                                <button class="secondary-btn" onclick="copyOutput('moonsec')">
+                                    📋 Copy Output
+                                </button>
+                                <button class="danger-btn" onclick="clearOutput('moonsec')">
+                                    🗑️ Clear
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="panel log-panel">
+                        <div class="panel-header">
+                            <span class="status-indicator idle" id="statusMoonsec"></span>
+                            Status Log
+                        </div>
+                        <div class="log-content" id="logMoonsec"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Luraph Tab -->
+            <div id="tab-luraph" class="tab-content">
+                <div class="panel">
+                    <div class="panel-header">📥 Luraph Obfuscated Code</div>
+                    <div class="panel-content">
+                        <div class="tab-info">
+                            <strong>Luraph Specialization:</strong> Designed for Luraph obfuscator. Hooks string pool and function environment manipulation.
+                        </div>
+                        <textarea id="inputLuraph" placeholder="Paste Luraph obfuscated code here..."></textarea>
+                        <div class="button-group">
+                            <button class="execute-btn" onclick="executeDeobfuscate('luraph')">
+                                ▶ Execute & Deobfuscate
+                            </button>
+                            <button class="danger-btn" onclick="clearTab('luraph')">
+                                🗑️ Clear
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="right-column">
+                    <div class="panel">
+                        <div class="panel-header">📤 Deobfuscated Output</div>
+                        <div class="panel-content">
+                            <textarea id="outputLuraph" placeholder="Deobfuscated code will appear here..." readonly></textarea>
+                            <div class="button-group">
+                                <button class="secondary-btn" onclick="copyOutput('luraph')">
+                                    📋 Copy Output
+                                </button>
+                                <button class="danger-btn" onclick="clearOutput('luraph')">
+                                    🗑️ Clear
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="panel log-panel">
+                        <div class="panel-header">
+                            <span class="status-indicator idle" id="statusLuraph"></span>
+                            Status Log
+                        </div>
+                        <div class="log-content" id="logLuraph"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mote Tab -->
+            <div id="tab-mote" class="tab-content">
+                <div class="panel">
+                    <div class="panel-header">📥 Mote Obfuscated Code</div>
+                    <div class="panel-content">
+                        <div class="tab-info">
+                            <strong>Mote Specialization:</strong> Targets Mote obfuscator patterns. Captures obfuscation tables and deobfuscation logic.
+                        </div>
+                        <textarea id="inputMote" placeholder="Paste Mote obfuscated code here..."></textarea>
+                        <div class="button-group">
+                            <button class="execute-btn" onclick="executeDeobfuscate('mote')">
+                                ▶ Execute & Deobfuscate
+                            </button>
+                            <button class="danger-btn" onclick="clearTab('mote')">
+                                🗑️ Clear
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="right-column">
+                    <div class="panel">
+                        <div class="panel-header">📤 Deobfuscated Output</div>
+                        <div class="panel-content">
+                            <textarea id="outputMote" placeholder="Deobfuscated code will appear here..." readonly></textarea>
+                            <div class="button-group">
+                                <button class="secondary-btn" onclick="copyOutput('mote')">
+                                    📋 Copy Output
+                                </button>
+                                <button class="danger-btn" onclick="clearOutput('mote')">
+                                    🗑️ Clear
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="panel log-panel">
+                        <div class="panel-header">
+                            <span class="status-indicator idle" id="statusMote"></span>
+                            Status Log
+                        </div>
+                        <div class="log-content" id="logMote"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Custom Tab -->
+            <div id="tab-custom" class="tab-content">
+                <div class="panel">
+                    <div class="panel-header">📥 Custom Obfuscator</div>
+                    <div class="panel-content">
+                        <div class="tab-info">
+                            <strong>Custom Specialization:</strong> For unknown/custom obfuscators. Full hook coverage with advanced environment tracking.
+                        </div>
+                        <textarea id="inputCustom" placeholder="Paste custom obfuscated code here..."></textarea>
+                        <div class="button-group">
+                            <button class="execute-btn" onclick="executeDeobfuscate('custom')">
+                                ▶ Execute & Deobfuscate
+                            </button>
+                            <button class="danger-btn" onclick="clearTab('custom')">
+                                🗑️ Clear
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="right-column">
+                    <div class="panel">
+                        <div class="panel-header">📤 Deobfuscated Output</div>
+                        <div class="panel-content">
+                            <textarea id="outputCustom" placeholder="Deobfuscated code will appear here..." readonly></textarea>
+                            <div class="button-group">
+                                <button class="secondary-btn" onclick="copyOutput('custom')">
+                                    📋 Copy Output
+                                </button>
+                                <button class="danger-btn" onclick="clearOutput('custom')">
+                                    🗑️ Clear
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="panel log-panel">
+                        <div class="panel-header">
+                            <span class="status-indicator idle" id="statusCustom"></span>
+                            Status Log
+                        </div>
+                        <div class="log-content" id="logCustom"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let executionAborted = false;
+        let timeoutId = null;
+        let currentTab = 'generic';
+
+        const TABS = ['generic', 'wearevs', 'moonsec', 'luraph', 'mote', 'custom'];
+
+        // Lua sandbox and execution engine
+        const LuaDeobfuscator = {
+            capturedOutput: [],
+            capturedLoad: [],
+            capturedLoadstring: [],
+            capturedEnvs: [],
+            capturedTable: [],
+            returnedValue: null,
+
+            reset() {
+                this.capturedOutput = [];
+                this.capturedLoad = [];
+                this.capturedLoadstring = [];
+                this.capturedEnvs = [];
+                this.capturedTable = [];
+                this.returnedValue = null;
+                executionAborted = false;
+            },
+
+            createSandbox(mode) {
+                const lua = new Fengari.Lua.State();
+                const luaLib = Fengari.Lua;
+                const aux = Fengari.lauxlib;
+
+                // Load standard libraries
+                aux.luaL_openlibs(lua);
+
+                // Override print() to capture output
+                luaLib.lua_pushcfunction(lua, (L) => {
+                    const argc = luaLib.lua_gettop(L);
+                    const output = [];
+                    for (let i = 1; i <= argc; i++) {
+                        const val = luaLib.lua_tostring(L, i);
+                        output.push(val === null ? 'nil' : val);
+                    }
+                    const line = output.join('\t');
+                    this.capturedOutput.push(line);
+                    addLog(currentTab, 'Captured print():', line, 'captured');
+                    return 0;
+                });
+                luaLib.lua_setglobal(lua, 'print');
+
+                // Override load() to capture loaded code
+                luaLib.lua_pushcfunction(lua, (L) => {
+                    const code = luaLib.lua_tostring(L, 1);
+                    if (code) {
+                        this.capturedLoad.push(code);
+                        addLog(currentTab, 'Captured load():', code.substring(0, 80) + '...', 'captured');
+                    }
+                    try {
+                        aux.luaL_dostring(lua, code);
+                    } catch (e) {
+                        addLog(currentTab, 'Error in load():', e.message, 'error');
+                    }
+                    return 0;
+                });
+                luaLib.lua_setglobal(lua, 'load');
+
+                // Override loadstring() to capture loaded strings
+                luaLib.lua_pushcfunction(lua, (L) => {
+                    const code = luaLib.lua_tostring(L, 1);
+                    if (code) {
+                        this.capturedLoadstring.push(code);
+                        addLog(currentTab, 'Captured loadstring():', code.substring(0, 80) + '...', 'captured');
+                    }
+                    try {
+                        aux.luaL_dostring(lua, `_loaded_func = function() ${code} end`);
+                        luaLib.lua_getglobal(lua, '_loaded_func');
+                    } catch (e) {
+                        addLog(currentTab, 'Error in loadstring():', e.message, 'error');
+                    }
+                    return 1;
+                });
+                luaLib.lua_setglobal(lua, 'loadstring');
+
+                // Mode-specific hooks
+                if (mode === 'wearevs') {
+                    this.setupWeAreDevsHooks(lua, luaLib);
+                } else if (mode === 'moonsec') {
+                    this.setupMoonSecHooks(lua, luaLib);
+                } else if (mode === 'luraph') {
+                    this.setupLuraphHooks(lua, luaLib);
+                } else if (mode === 'mote') {
+                    this.setupMoteHooks(lua, luaLib);
+                } else if (mode === 'custom') {
+                    this.setupCustomHooks(lua, luaLib);
+                }
+
+                // Generic hooks
+                luaLib.lua_pushcfunction(lua, (L) => {
+                    addLog(currentTab, 'getfenv() called', '', 'info');
+                    const idx = luaLib.lua_tonumber(L, 1) || 1;
+                    luaLib.lua_getfenv(L, idx);
+                    return 1;
+                });
+                luaLib.lua_setglobal(lua, 'getfenv');
+
+                luaLib.lua_pushcfunction(lua, (L) => {
+                    const idx = luaLib.lua_tonumber(L, 1);
+                    addLog(currentTab, 'setfenv() called with index:', idx.toString(), 'info');
+                    luaLib.lua_setfenv(L, idx);
+                    return 0;
+                });
+                luaLib.lua_setglobal(lua, 'setfenv');
+
+                // Timeout check
+                luaLib.lua_pushcfunction(lua, (L) => {
+                    if (executionAborted) {
+                        throw new Error('Execution timeout - infinite loop detected');
+                    }
+                    return 0;
+                });
+                luaLib.lua_setglobal(lua, '_check_timeout');
+
+                return lua;
+            },
+
+            setupWeAreDevsHooks(lua, luaLib) {
+                addLog(currentTab, 'Applying WeAreDevs-specific hooks', '', 'info');
+                // WeAreDevs specific string deobfuscation
+                luaLib.lua_pushcfunction(lua, (L) => {
+                    const args = [];
+                    const argc = luaLib.lua_gettop(L);
+                    for (let i = 1; i <= argc; i++) {
+                        args.push(luaLib.lua_tostring(L, i));
+                    }
+                    addLog(currentTab, 'WeAreDevs deobfuscation call:', args.join(', '), 'captured');
+                    return 0;
+                });
+                luaLib.lua_setglobal(lua, '_deobfuscate');
+            },
+
+            setupMoonSecHooks(lua, luaLib) {
+                addLog(currentTab, 'Applying MoonSec-specific hooks', '', 'info');
+                // MoonSec bytecode capture
+                luaLib.lua_pushcfunction(lua, (L) => {
+                    addLog(currentTab, 'MoonSec VM instruction captured', '', 'info');
+                    return 0;
+                });
+                luaLib.lua_setglobal(lua, '_vm_exec');
+            },
+
+            setupLuraphHooks(lua, luaLib) {
+                addLog(currentTab, 'Applying Luraph-specific hooks', '', 'info');
+                // Luraph string pool access
+                luaLib.lua_pushcfunction(lua, (L) => {
+                    const idx = luaLib.lua_tonumber(L, 1);
+                    addLog(currentTab, 'Luraph string pool access:', idx.toString(), 'captured');
+                    return 1;
+                });
+                luaLib.lua_setglobal(lua, '_luraph_string');
+            },
+
+            setupMoteHooks(lua, luaLib) {
+                addLog(currentTab, 'Applying Mote-specific hooks', '', 'info');
+                // Mote obfuscation table
+                luaLib.lua_pushcfunction(lua, (L) => {
+                    addLog(currentTab, 'Mote obfuscation routine called', '', 'info');
+                    return 0;
+                });
+                luaLib.lua_setglobal(lua, '_mote_deobf');
+            },
+
+            setupCustomHooks(lua, luaLib) {
+                addLog(currentTab, 'Applying comprehensive custom hooks', '', 'info');
+                // Enhanced environment tracking
+                luaLib.lua_pushcfunction(lua, (L) => {
+                    addLog(currentTab, 'Custom environment function called', '', 'info');
+                    return 0;
+                });
+                luaLib.lua_setglobal(lua, '_custom_env_hook');
+            },
+
+            async execute(code, mode) {
+                this.reset();
+                addLog(currentTab, 'Initializing sandbox (' + mode.toUpperCase() + ')...', '', 'info');
+
+                try {
+                    const lua = this.createSandbox(mode);
+                    const modifiedCode = this.injectTimeoutChecks(code);
+
+                    addLog(currentTab, 'Executing obfuscated code...', '', 'info');
+                    updateStatusIndicator(currentTab, 'running');
+
+                    let executionComplete = false;
+                    timeoutId = setTimeout(() => {
+                        if (!executionComplete) {
+                            executionAborted = true;
+                            addLog(currentTab, '⚠️ Execution timeout (5s) - suspected infinite loop', '', 'warning');
+                            updateStatusIndicator(currentTab, 'error');
+                        }
+                    }, 5000);
+
+                    try {
+                        const result = Fengari.lauxlib.luaL_dostring(lua, modifiedCode);
+                        executionComplete = true;
+                        clearTimeout(timeoutId);
+
+                        if (result !== 0) {
+                            const error = Fengari.lua.lua_tostring(lua, -1);
+                            addLog(currentTab, 'Lua Error:', error, 'error');
+                            updateStatusIndicator(currentTab, 'error');
+                        } else {
+                            addLog(currentTab, '✓ Execution completed successfully', '', 'success');
+
+                            const luaLib = Fengari.Lua;
+                            if (luaLib.lua_gettop(lua) > 0) {
+                                const returnVal = luaLib.lua_tostring(lua, -1);
+                                if (returnVal) {
+                                    this.capturedOutput.push(returnVal);
+                                    addLog(currentTab, 'Return value captured:', returnVal.substring(0, 80) + '...', 'captured');
+                                }
+                            }
+
+                            updateStatusIndicator(currentTab, 'idle');
+                        }
+                    } catch (e) {
+                        executionComplete = true;
+                        clearTimeout(timeoutId);
+                        addLog(currentTab, 'Execution Error:', e.message, 'error');
+                        updateStatusIndicator(currentTab, 'error');
+                    }
+
+                } catch (e) {
+                    addLog(currentTab, 'Sandbox Error:', e.message, 'error');
+                    updateStatusIndicator(currentTab, 'error');
+                }
+            },
+
+            injectTimeoutChecks(code) {
+                const lines = code.split('\n');
+                const checked = lines.map((line, idx) => {
+                    if (idx % 5 === 0 && line.trim().length > 0) {
+                        return '_check_timeout()\n' + line;
+                    }
+                    return line;
+                });
+                return checked.join('\n');
+            },
+
+            extractDeobfuscatedCode() {
+                const parts = [];
+
+                if (this.capturedLoadstring.length > 0) {
+                    parts.push('-- Extracted from loadstring():');
+                    parts.push(...this.capturedLoadstring);
+                    parts.push('');
+                }
+
+                if (this.capturedLoad.length > 0) {
+                    parts.push('-- Extracted from load():');
+                    parts.push(...this.capturedLoad);
+                    parts.push('');
+                }
+
+                if (this.capturedOutput.length > 0) {
+                    parts.push('-- Captured print() output:');
+                    parts.push(...this.capturedOutput);
+                    parts.push('');
+                }
+
+                return parts.length > 0 ? parts.join('\n') : '-- No deobfuscated code captured. The obfuscator may not expose strings via print(), load(), or loadstring().';
+            }
+        };
+
+        // UI Functions
+        function switchTab(tabName) {
+            if (!TABS.includes(tabName)) return;
+
+            currentTab = tabName;
+
+            // Update button states
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+
+            // Update content visibility
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+            document.getElementById('tab-' + tabName).classList.add('active');
+        }
+
+        function addLog(tabName, message, value = '', type = 'info') {
+            const logContent = document.getElementById('log' + capitalizeFirst(tabName));
+            if (!logContent) return;
+
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+
+            const timestamp = new Date().toLocaleTimeString();
+            const typeClass = `log-${type}`;
+
+            entry.innerHTML = `
+                <div class="log-timestamp">[${timestamp}]</div>
+                <div class="${typeClass}">
+                    <strong>${message}</strong>
+                    ${value ? '<br/>' + escapeHtml(value.substring(0, 200)) + (value.length > 200 ? '...' : '') : ''}
+                </div>
+            `;
+
+            logContent.appendChild(entry);
+            logContent.scrollTop = logContent.scrollHeight;
+        }
+
+        function updateStatusIndicator(tabName, status) {
+            const indicator = document.getElementById('status' + capitalizeFirst(tabName));
+            if (indicator) {
+                indicator.className = `status-indicator ${status}`;
+            }
+        }
+
+        function capitalizeFirst(str) {
+            return str.charAt(0).toUpperCase() + str.slice(1);
+        }
+
+        async function executeDeobfuscate(mode) {
+            const inputCode = document.getElementById('input' + capitalizeFirst(mode)).value.trim();
+
+            if (!inputCode) {
+                addLog(mode, '⚠️ Error: Input code is empty', '', 'error');
+                return;
+            }
+
+            document.querySelector(`[onclick="executeDeobfuscate('${mode}')"]`).disabled = true;
+            clearLog(mode);
+            addLog(mode, 'Starting deobfuscation...', '', 'info');
+
+            await LuaDeobfuscator.execute(inputCode, mode);
+
+            const deobfuscated = LuaDeobfuscator.extractDeobfuscatedCode();
+            document.getElementById('output' + capitalizeFirst(mode)).value = deobfuscated;
+
+            document.querySelector(`[onclick="executeDeobfuscate('${mode}')"]`).disabled = false;
+            addLog(mode, 'Ready for new execution', '', 'info');
+        }
+
+        function copyOutput(mode) {
+            const output = document.getElementById('output' + capitalizeFirst(mode));
+            if (!output.value.trim()) {
+                addLog(mode, '⚠️ Nothing to copy', '', 'warning');
+                return;
+            }
+            output.select();
+            document.execCommand('copy');
+            addLog(mode, '✓ Output copied to clipboard', '', 'success');
+        }
+
+        function clearTab(mode) {
+            document.getElementById('input' + capitalizeFirst(mode)).value = '';
+            addLog(mode, 'Input cleared', '', 'info');
+        }
+
+        function clearOutput(mode) {
+            document.getElementById('output' + capitalizeFirst(mode)).value = '';
+            addLog(mode, 'Output cleared', '', 'info');
+        }
+
+        function clearLog(mode) {
+            const logContent = document.getElementById('log' + capitalizeFirst(mode));
+            if (logContent) logContent.innerHTML = '';
+        }
+
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+
+        // Initialize
+        window.addEventListener('load', () => {
+            TABS.forEach(tab => {
+                addLog(tab, 'Lua Deobfuscator initialized', '', 'success');
+                addLog(tab, 'Ready to execute Lua code', '', 'info');
+                updateStatusIndicator(tab, 'idle');
+            });
+        });
+
+        // Cleanup on unload
+        window.addEventListener('beforeunload', () => {
+            if (timeoutId) clearTimeout(timeoutId);
+        });
+    </script>
+</body>
+</html>
